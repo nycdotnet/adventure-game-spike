@@ -1,0 +1,8 @@
+{
+  "name": "adventure-game-spike",
+  "dependencies": {},
+  "globalDependencies": {
+    "hapi": "registry:dt/hapi#13.0.0+20160803202811",
+    "phaser": "github:photonstorm/phaser/typescript/typings.json"
+  }
+}

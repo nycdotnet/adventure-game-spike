@@ -1,4 +1,4 @@
-const game = new Phaser.Game(800, 600, Phaser.AUTO, 'phaser-example', { preload, create, update });
+const game = new Phaser.Game(800, 600, Phaser.AUTO, 'game-area', {preload, create, update}, false, false );
 
 let player: Phaser.Sprite;
 let cursors: Phaser.CursorKeys;

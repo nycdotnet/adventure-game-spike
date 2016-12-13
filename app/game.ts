@@ -7,10 +7,15 @@ let gamepadDebug: HTMLSpanElement;
 let gamepads: Phaser.Gamepad;
 let weapon: Phaser.Weapon;
 let weaponYOffset: number;
+let grunts: Phaser.Group;
+let padStatus: string[] = [];
+let pad0mainstick: {x: number, y: number} = undefined;
+let pad0secondstick: {x: number, y: number} = undefined;
 
 function preload() {
     game.load.spritesheet('linkRunning', 'images/LinkRunning.gif', 24, 28);
     game.load.image('bullet', 'images/bullet.png');
+    game.load.image('grunt', 'images/grunt.png');
     gamepadDebug = document.getElementById("gamepadDebug");
 }
 
@@ -29,6 +34,12 @@ function create() {
     weapon.fireRate = 100;
     weaponYOffset = (player.height / 2);
     weapon.trackSprite(player, 0, weaponYOffset, false);
+
+    grunts = game.add.group();
+    grunts.enableBody = true;
+    grunts.physicsBodyType = Phaser.Physics.ARCADE;
+
+    addGrunts();
 
     gamepads = new Phaser.Gamepad(game);
 
@@ -52,7 +63,7 @@ function create() {
           pad0secondstick.y = axis3 || 0;
         }
       } 
-    })
+    });
 
 
     game.input.gamepad.start();
@@ -60,9 +71,30 @@ function create() {
     cursors = game.input.keyboard.createCursorKeys();
 }
 
-var padStatus: string[] = [];
-var pad0mainstick: {x: number, y: number} = undefined;
-var pad0secondstick: {x: number, y: number} = undefined;
+function addGrunts(count: number = 10) {
+
+    // this part is not currently working.
+    var playerbounds = player.getBounds();
+    playerbounds.x -= (playerbounds.width * 0.5);
+    playerbounds.y -= (playerbounds.height * 0.5);
+    playerbounds.height *= 2;
+    playerbounds.width *= 2;
+    
+    var five_percent_x_in_pixels = Math.floor(game.width * 0.05);
+    var five_percent_y_in_pixels = Math.floor(game.height * 0.05);
+
+    for (let i = 0; i < count; i += 1) {
+      do {
+        var x = game.world.randomX;
+        var y = game.world.randomY;
+
+      } while (playerbounds.contains(x, y) || x < five_percent_x_in_pixels || x > (game.width - five_percent_x_in_pixels) || y < five_percent_y_in_pixels || y > (game.height - five_percent_y_in_pixels))
+
+      var grunt = grunts.create(x, y, 'grunt');
+      grunt.anchor.setTo(0.5, 0.5);
+    }
+
+}
 
 
 function update() {
@@ -112,4 +144,15 @@ function update() {
     player.frame = 8;
   }
 
+  game.physics.arcade.overlap(weapon.bullets, grunts, killGrunt, null, this);
+
+}
+
+function killGrunt(bullet: Phaser.Bullet, grunt: Phaser.Sprite) {
+  bullet.kill();
+  grunt.kill();
+
+  if (grunts.countLiving() === 0) {
+    addGrunts();
+  }
 }

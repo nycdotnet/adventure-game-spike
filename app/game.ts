@@ -3,9 +3,12 @@ const game = new Phaser.Game(800, 600, Phaser.AUTO, 'game-area', {preload, creat
 let player: Phaser.Sprite;
 let cursors: Phaser.CursorKeys;
 let playerSpeed = 250, playerScale = 3;
+let gamepadDebug: HTMLSpanElement;
+let gamepads: Phaser.Gamepad;
 
 function preload() {
     game.load.spritesheet('linkRunning', 'images/LinkRunning.gif', 24, 28);
+    gamepadDebug = document.getElementById("gamepadDebug");
 }
 
 function create() {
@@ -17,13 +20,43 @@ function create() {
     player.anchor.x = 0.5;
     game.physics.enable(player, Phaser.Physics.ARCADE);
 
+    gamepads = new Phaser.Gamepad(game);
+
+    game.input.gamepad.addCallbacks(this, {
+      onAxis: (pad: Phaser.SinglePad, axis: number, value: number) => {
+        const axis0 = pad.axis(0);
+        const axis1 = pad.axis(1);
+        padStatus[pad.index] = `Pad ${pad.index} (${(<any>pad)._rawPad['id']}): Zero: ${axis0}, One: ${axis1}`;
+        pad0mainstick = {x: axis0 || 0, y: axis1 || 0};
+      } 
+    })
+
+
+    game.input.gamepad.start();
+
     cursors = game.input.keyboard.createCursorKeys();
 }
+
+var padStatus: string[] = [];
+var pad0mainstick: {x: number, y: number} = undefined;
 
 
 function update() {
 
+  gamepadDebug.innerHTML = `gamepads supported: ${gamepads.supported}.  gamepads connected: ${gamepads.padsConnected}.  gamepad info: ${JSON.stringify(padStatus)}`;
+
   player.body.velocity.setTo(0, 0);
+
+  if (pad0mainstick) {
+    player.body.velocity.x = playerSpeed * pad0mainstick.x;
+    player.body.velocity.y = playerSpeed * pad0mainstick.y;
+    if (pad0mainstick.x > 0) {
+      player.scale.x = playerScale;
+    } else if (pad0mainstick.x < 0) {
+      player.scale.x = -playerScale;
+    }
+    player.animations.play('runRight');
+  }
 
   if (cursors.left.isDown) {
     player.body.velocity.x -= playerSpeed;

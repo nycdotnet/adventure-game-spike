@@ -12960,7 +12960,14 @@ declare module Phaser {
         * @param callbacks Object that takes six different callback methods:
         *                  onConnectCallback, onDisconnectCallback, onDownCallback, onUpCallback, onAxisCallback, onFloatCallback
         */
-        addCallbacks(context: any, callbacks: any): void;
+        addCallbacks(context: any, callbacks: {
+            onAxis?: (pad: Phaser.SinglePad, axis: number, value: number) => void,
+            onConnect?: (padIndex: number) => void,
+            onDisconnect?: (padIndex: number) => void,
+            onDown?: (buttonCode: number, value: number, padIndex: number) => void,
+            onFloat?: (buttonCode: number, value: number, padIndex: number) => void,
+            onUp?: (buttonCode: number, value: number, padIndex: number) => void
+        }): void;
 
         /**
         * Returns true if the button is currently pressed down, on ANY gamepad.

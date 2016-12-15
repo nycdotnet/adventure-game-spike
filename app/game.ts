@@ -1,4 +1,4 @@
-const game = new Phaser.Game(800, 600, Phaser.AUTO, 'game-area', {preload, create, update}, false, false );
+const game = new Phaser.Game(800, 600, Phaser.AUTO, 'game-area', {preload, create, update, render}, false, false );
 
 let player: Phaser.Sprite;
 let cursors: Phaser.CursorKeys;
@@ -6,14 +6,17 @@ let playerSpeed = 250, playerScale = 3;
 let gamepadDebug: HTMLSpanElement;
 let gamepads: Phaser.Gamepad;
 let weapon: Phaser.Weapon;
-let weaponYOffset: number;
+//let weaponYOffset: number;
 let grunts: Phaser.Group;
 let padStatus: string[] = [];
 let pad0mainstick: {x: number, y: number} = undefined;
 let pad0secondstick: {x: number, y: number} = undefined;
+let scoreText: Phaser.Text;
 
 function preload() {
-    game.load.spritesheet('linkRunning', 'images/LinkRunning.gif', 24, 28);
+    game.load.spritesheet('linkRunning', 'images/LinkRunning.png', 24, 28);
+    game.load.spritesheet('arrow', 'images/Arrow.png', 20, 20);
+    //const arrow = game.cache.getImage('arrow');
     game.load.image('bullet', 'images/bullet.png');
     game.load.image('grunt', 'images/grunt.png');
     gamepadDebug = document.getElementById("gamepadDebug");
@@ -22,24 +25,30 @@ function preload() {
 function create() {
     player = game.add.sprite(40, 100, 'linkRunning');
     player.animations.add('runRight', [0,1,2,3,4,5,6,7], 30);
-    player.scale.x = playerScale;
-    player.scale.y = playerScale;
-    player.anchor.x = 0.5;
-    player.anchor.x = 0.5;
+    player.scale.setTo(playerScale, playerScale);
+    player.anchor.setTo(0.5, 0.5);
     game.physics.enable(player, Phaser.Physics.ARCADE);
-
-    weapon = game.add.weapon(30, 'bullet');
+    
+    weapon = game.add.weapon(30, 'arrow', 5);
+    weapon.bullets.forEach((b : Phaser.Bullet) => {
+      b.animations.add("arrowHit", [0,1,2,3,4], 30, false);
+      b.scale.setTo(playerScale, playerScale);
+    }, this);
     weapon.bulletKillType = Phaser.Weapon.KILL_WORLD_BOUNDS;
-    weapon.bulletSpeed = 600;
-    weapon.fireRate = 100;
-    weaponYOffset = (player.height / 2);
-    weapon.trackSprite(player, 0, weaponYOffset, false);
+    weapon.bulletSpeed = 700;
+    weapon.fireRate = 120;
+    weapon.trackSprite(player);
+
+    player.bringToTop();
 
     grunts = game.add.group();
     grunts.enableBody = true;
     grunts.physicsBodyType = Phaser.Physics.ARCADE;
 
     addGrunts();
+
+    var style = { font: "12px Arial", fill: "#ffffff", align: "left" };
+    scoreText = game.add.text(10, 10, "", style);
 
     gamepads = new Phaser.Gamepad(game);
 
@@ -62,7 +71,41 @@ function create() {
           pad0secondstick.x = axis2 || 0;
           pad0secondstick.y = axis3 || 0;
         }
-      } 
+      },
+      onConnect: (pad) => {
+        const result = [];
+        if (gamepads.pad1.connected || pad === 0) {
+          result.push("Pad 1 connected.");
+        }
+        if (gamepads.pad2.connected || pad === 1) {
+          result.push("Pad 2 connected.");
+        }
+        if (gamepads.pad3.connected || pad === 2) {
+          result.push("Pad 3 connected.");
+        }
+        if (gamepads.pad4.connected || pad === 3) {
+          result.push("Pad 4 connected.");
+        }
+
+        scoreText.text = result.join("  ");
+      },
+      onDisconnect: (pad) => {
+        const result = [];
+        if (gamepads.pad1.connected && pad !== 0) {
+          result.push("Pad 1 connected.");
+        }
+        if (gamepads.pad2.connected && pad !== 1) {
+          result.push("Pad 2 connected.");
+        }
+        if (gamepads.pad3.connected && pad !== 2) {
+          result.push("Pad 3 connected.");
+        }
+        if (gamepads.pad4.connected && pad !== 3) {
+          result.push("Pad 4 connected.");
+        }
+
+        scoreText.text = result.join("  ");
+      }
     });
 
 
@@ -96,6 +139,11 @@ function addGrunts(count: number = 10) {
 
 }
 
+function render() {
+   game.debug.body(player);
+   grunts.forEach((grunt: Phaser.Sprite) => { game.debug.body(grunt)}, this);
+   weapon.bullets.forEach((arrow: Phaser.Sprite) => { game.debug.body(arrow)}, this);
+}
 
 function update() {
 
@@ -116,7 +164,8 @@ function update() {
 
   if (pad0secondstick) {
     if (pad0secondstick.x !== 0 || pad0secondstick.y !== 0) {
-      weapon.fireAtXY(player.x + pad0secondstick.x, player.y + pad0secondstick.y + weaponYOffset);
+      //weapon.fireFrom.centerOn(player.worldPosition.x, player.worldPosition.y);
+      weapon.fireAtXY(player.centerX + pad0secondstick.x, player.centerY + pad0secondstick.y);
     }
   }
 
@@ -143,13 +192,16 @@ function update() {
     player.animations.stop();
     player.frame = 8;
   }
-
   game.physics.arcade.overlap(weapon.bullets, grunts, killGrunt, null, this);
 
 }
 
-function killGrunt(bullet: Phaser.Bullet, grunt: Phaser.Sprite) {
-  bullet.kill();
+function killGrunt(arrow: Phaser.Bullet, grunt: Phaser.Sprite) {
+  arrow.position.x -= arrow.body.velocity.x / 100; 
+  arrow.position.y -=  arrow.body.velocity.y / 100;
+  arrow.body.velocity.x = 0;
+  arrow.body.velocity.y = 0;
+  arrow.play("arrowHit", 10, false, true);
   grunt.kill();
 
   if (grunts.countLiving() === 0) {

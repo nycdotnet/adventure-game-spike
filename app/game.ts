@@ -1,3 +1,4 @@
+
 const game = new Phaser.Game(800, 600, Phaser.AUTO, 'game-area', {preload, create, update, render}, false, false );
 
 let player: Phaser.Sprite;
@@ -16,23 +17,25 @@ let scoreText: Phaser.Text;
 function preload() {
     game.load.spritesheet('linkRunning', 'images/LinkRunning.png', 24, 28);
     game.load.spritesheet('arrow', 'images/Arrow.png', 20, 20);
-    //const arrow = game.cache.getImage('arrow');
     game.load.image('bullet', 'images/bullet.png');
     game.load.image('grunt', 'images/grunt.png');
     gamepadDebug = document.getElementById("gamepadDebug");
 }
 
+
 function create() {
+
     player = game.add.sprite(40, 100, 'linkRunning');
     player.animations.add('runRight', [0,1,2,3,4,5,6,7], 30);
     player.scale.setTo(playerScale, playerScale);
     player.anchor.setTo(0.5, 0.5);
     game.physics.enable(player, Phaser.Physics.ARCADE);
-    
+
     weapon = game.add.weapon(30, 'arrow', 5);
     weapon.bullets.forEach((b : Phaser.Bullet) => {
       b.animations.add("arrowHit", [0,1,2,3,4], 30, false);
       b.scale.setTo(playerScale, playerScale);
+      b.body.updateBounds();
     }, this);
     weapon.bulletKillType = Phaser.Weapon.KILL_WORLD_BOUNDS;
     weapon.bulletSpeed = 700;
@@ -146,9 +149,10 @@ function render() {
 }
 
 function update() {
-
-  gamepadDebug.innerHTML = `gamepads supported: ${gamepads.supported}.  gamepads connected: ${gamepads.padsConnected}.  gamepad info: ${JSON.stringify(padStatus)}`;
-
+  if (gamepads) {
+    gamepadDebug.innerHTML = `gamepads supported: ${gamepads.supported}.  gamepads connected: ${gamepads.padsConnected}.  gamepad info: ${JSON.stringify(padStatus)}`;
+  }
+  
   player.body.velocity.setTo(0, 0);
 
   if (pad0mainstick) {
@@ -169,30 +173,35 @@ function update() {
     }
   }
 
-  if (cursors.left.isDown) {
-    player.body.velocity.x -= playerSpeed;
-    player.scale.x = -playerScale;
-    player.animations.play('runRight');
-  }
-  if (cursors.right.isDown) {
-    player.body.velocity.x += playerSpeed;
-    player.scale.x = playerScale;
-    player.animations.play('runRight');
-  }
-  if (cursors.up.isDown) {
-    player.body.velocity.y -= playerSpeed;
-    player.animations.play('runRight');
-  }
-  if (cursors.down.isDown) {
-    player.body.velocity.y += playerSpeed;
-    player.animations.play('runRight');
+  if (cursors) {
+    if (cursors.left.isDown) {
+      player.body.velocity.x -= playerSpeed;
+      player.scale.x = -playerScale;
+      player.animations.play('runRight');
+    }
+    if (cursors.right.isDown) {
+      player.body.velocity.x += playerSpeed;
+      player.scale.x = playerScale;
+      player.animations.play('runRight');
+    }
+    if (cursors.up.isDown) {
+      player.body.velocity.y -= playerSpeed;
+      player.animations.play('runRight');
+    }
+    if (cursors.down.isDown) {
+      player.body.velocity.y += playerSpeed;
+      player.animations.play('runRight');
+    }
   }
 
   if (player.body.velocity.x === 0 && player.body.velocity.y === 0) {
     player.animations.stop();
     player.frame = 8;
   }
-  game.physics.arcade.overlap(weapon.bullets, grunts, killGrunt, null, this);
+
+  if (weapon && weapon.bullets) {
+    game.physics.arcade.overlap(weapon.bullets, grunts, killGrunt, null, this);
+  }
 
 }
 

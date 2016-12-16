@@ -1,5 +1,7 @@
+let gameWidth = 800;
+let gameHeight = 600;
 
-const game = new Phaser.Game(800, 600, Phaser.AUTO, 'game-area', {preload, create, update, render}, false, false );
+const game = new Phaser.Game(gameWidth, gameHeight, Phaser.AUTO, 'game-area', {preload, create, update, render}, false, false );
 
 let player: Phaser.Sprite;
 let cursors: Phaser.CursorKeys;
@@ -7,7 +9,6 @@ let playerSpeed = 250, playerScale = 3;
 let gamepadDebug: HTMLSpanElement;
 let gamepads: Phaser.Gamepad;
 let weapon: Phaser.Weapon;
-//let weaponYOffset: number;
 let grunts: Phaser.Group;
 let padStatus: string[] = [];
 let pad0mainstick: {x: number, y: number} = undefined;
@@ -16,8 +17,7 @@ let scoreText: Phaser.Text;
 
 function preload() {
     game.load.spritesheet('linkRunning', 'images/LinkRunning.png', 24, 28);
-    game.load.spritesheet('arrow', 'images/Arrow.png', 20, 20);
-    game.load.image('bullet', 'images/bullet.png');
+    game.load.spritesheet('arrow', 'images/Arrow.png', 20, 9);
     game.load.image('grunt', 'images/grunt.png');
     gamepadDebug = document.getElementById("gamepadDebug");
 }
@@ -25,7 +25,7 @@ function preload() {
 
 function create() {
 
-    player = game.add.sprite(40, 100, 'linkRunning');
+    player = game.add.sprite(0, 0, 'linkRunning');
     player.animations.add('runRight', [0,1,2,3,4,5,6,7], 30);
     player.scale.setTo(playerScale, playerScale);
     player.anchor.setTo(0.5, 0.5);
@@ -33,14 +33,29 @@ function create() {
 
     weapon = game.add.weapon(30, 'arrow', 5);
     weapon.bullets.forEach((b : Phaser.Bullet) => {
+      const body = b.body as Phaser.Physics.Arcade.Body;
       b.animations.add("arrowHit", [0,1,2,3,4], 30, false);
       b.scale.setTo(playerScale, playerScale);
-      b.body.updateBounds();
+      body.updateBounds();
     }, this);
+
     weapon.bulletKillType = Phaser.Weapon.KILL_WORLD_BOUNDS;
     weapon.bulletSpeed = 700;
     weapon.fireRate = 120;
     weapon.trackSprite(player);
+    weapon.onFire.add((b: Phaser.Bullet) => {
+      b.frame = 5;
+      // trying to get the hitbox to not be wide when firing up or down.
+      // this can be improved in the future with some trigonometry.
+      // see here: http://www.html5gamedevs.com/topic/27095-bullet-scaling/
+      const body = b.body as Phaser.Physics.Arcade.Body;
+      const rotationInRadians = Math.abs(b.rotation);
+      if (rotationInRadians > 0.78 && rotationInRadians < 2.3) {
+        body.setSize(9, 9, 5, 0);
+      } else {
+        body.setSize(20, 9, 0, 0);
+      }
+    });
 
     player.bringToTop();
 
@@ -48,7 +63,7 @@ function create() {
     grunts.enableBody = true;
     grunts.physicsBodyType = Phaser.Physics.ARCADE;
 
-    addGrunts();
+    newLevel();
 
     var style = { font: "12px Arial", fill: "#ffffff", align: "left" };
     scoreText = game.add.text(10, 10, "", style);
@@ -117,26 +132,57 @@ function create() {
     cursors = game.input.keyboard.createCursorKeys();
 }
 
-function addGrunts(count: number = 10) {
+function movePlayerToCenter() {
+    player.x = gameWidth / 2;
+    player.y = gameHeight / 2;
+}
 
-    // this part is not currently working.
-    var playerbounds = player.getBounds();
-    playerbounds.x -= (playerbounds.width * 0.5);
-    playerbounds.y -= (playerbounds.height * 0.5);
-    playerbounds.height *= 2;
-    playerbounds.width *= 2;
+function newLevel(gruntCount: number = 10) {
+
+    movePlayerToCenter();
+
+    // Enemy boxes: the screen is divided up into four boxes that do not overlap each other or the player,
+    //  with a slight margin from the edge and the player.
+    // box 0 is the upper-left of the game area including above the player.
+    // box 1 is the upper-right of the game area including to the right of the player.
+    // box 2 is the lower-right of the game area including below the player.
+    // box 3 is the lower-left of the game area including to the left of the player.
     
-    var five_percent_x_in_pixels = Math.floor(game.width * 0.05);
-    var five_percent_y_in_pixels = Math.floor(game.height * 0.05);
+    const cheesyDifficultyRatio = 1.8; // the higher this ratio, the further the monsters will spawn from the player.
+    const playerBounds = player.getBounds();
+    const enemyBox0and2Width = (gameWidth / 2) + (playerBounds.width / 2 * playerScale * cheesyDifficultyRatio);
+    const enemyBox1and3Width = gameWidth - enemyBox0and2Width;
+    const enemyBox0and2Height = (gameHeight / 2) - (playerBounds.height / 2 * playerScale * cheesyDifficultyRatio);
+    const enemyBox1and3Height = gameHeight - enemyBox0and2Height;
 
-    for (let i = 0; i < count; i += 1) {
-      do {
-        var x = game.world.randomX;
-        var y = game.world.randomY;
+    const g = game.add.graphics(0,0),
+      enemyBoxes: PIXI.Rectangle[] = Array(3),
+      xMargin = Math.floor(game.width * 0.05),
+      yMargin = Math.floor(game.height * 0.05);
 
-      } while (playerbounds.contains(x, y) || x < five_percent_x_in_pixels || x > (game.width - five_percent_x_in_pixels) || y < five_percent_y_in_pixels || y > (game.height - five_percent_y_in_pixels))
+    enemyBoxes[0] = new PIXI.Rectangle(0,0, enemyBox0and2Width, enemyBox0and2Height);
+    enemyBoxes[1] = new PIXI.Rectangle(enemyBox0and2Width, 0, enemyBox1and3Width, enemyBox1and3Height);
+    enemyBoxes[2] = new PIXI.Rectangle(gameWidth - enemyBox0and2Width, gameHeight - enemyBox0and2Height, enemyBox0and2Width, enemyBox0and2Height);
+    enemyBoxes[3] = new PIXI.Rectangle(0, gameHeight - enemyBox1and3Height, enemyBox1and3Width, enemyBox1and3Height);
 
-      var grunt = grunts.create(x, y, 'grunt');
+    g.lineStyle(2, 0x0000FF, 1);
+    g.drawShape(enemyBoxes[0]);
+        
+    g.lineStyle(2, 0x00FF00, 1);
+    g.drawShape(enemyBoxes[1]);
+
+    g.lineStyle(2, 0xFF0000, 1);
+    g.drawShape(enemyBoxes[2]);
+
+    g.lineStyle(2, 0xFF00FF, 1);
+    g.drawShape(enemyBoxes[3]);
+    
+    for (let i = 0; i < gruntCount; i += 1) {
+      const enemyBox = enemyBoxes[i % 4],
+      x = game.rnd.integerInRange(enemyBox.x, enemyBox.x + enemyBox.width),
+      y = game.rnd.integerInRange(enemyBox.y, enemyBox.y + enemyBox.height),
+      grunt = grunts.create(x, y, 'grunt');
+
       grunt.anchor.setTo(0.5, 0.5);
     }
 
@@ -168,8 +214,7 @@ function update() {
 
   if (pad0secondstick) {
     if (pad0secondstick.x !== 0 || pad0secondstick.y !== 0) {
-      //weapon.fireFrom.centerOn(player.worldPosition.x, player.worldPosition.y);
-      weapon.fireAtXY(player.centerX + pad0secondstick.x, player.centerY + pad0secondstick.y);
+      weapon.fireAtXY(player.centerX + (pad0secondstick.x * 10), player.centerY + (pad0secondstick.y * 10));
     }
   }
 
@@ -206,14 +251,14 @@ function update() {
 }
 
 function killGrunt(arrow: Phaser.Bullet, grunt: Phaser.Sprite) {
-  arrow.position.x -= arrow.body.velocity.x / 100; 
-  arrow.position.y -=  arrow.body.velocity.y / 100;
-  arrow.body.velocity.x = 0;
-  arrow.body.velocity.y = 0;
-  arrow.play("arrowHit", 10, false, true);
-  grunt.kill();
+  if (arrow.alive && grunt.alive) {
+    arrow.body.velocity.x = 0;
+    arrow.body.velocity.y = 0;
+    arrow.play("arrowHit", 10, false, true);
+    grunt.kill();
+  }
 
   if (grunts.countLiving() === 0) {
-    addGrunts();
+    newLevel();
   }
 }

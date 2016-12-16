@@ -14,8 +14,8 @@
     "typescript": "^2.1.4"
   },
   "dependencies": {
-    "hapi": "^14.1.0",
-    "inert": "^4.0.1",
-    "phaser": "^2.6.1"
+    "hapi": "^16.0.1",
+    "inert": "^4.0.3",
+    "phaser": "^2.6.2"
   }
 }

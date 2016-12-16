@@ -15,7 +15,10 @@ let pad0mainstick: {x: number, y: number} = undefined;
 let pad0secondstick: {x: number, y: number} = undefined;
 let gamepadText: Phaser.Text;
 let scoreText: Phaser.Text;
-let level = 0, score = 0;
+let gameStartText: Phaser.Text;
+let gameOverText: Phaser.Text;
+const freeHeartEveryPoints = 35000;
+let level = 0, score = 0, nextFreeHeart = freeHeartEveryPoints;
 
 function preload() {
     game.load.spritesheet('linkRunning', 'images/LinkRunning.png', 24, 28);
@@ -33,6 +36,7 @@ function create() {
     player.anchor.setTo(0.5, 0.5);
     game.physics.enable(player, Phaser.Physics.ARCADE);
     player.body.updateBounds();
+    player.health = 3;
 
     weapon = game.add.weapon(30, 'arrow', 5);
     weapon.bullets.forEach((b : Phaser.Bullet) => {
@@ -68,11 +72,22 @@ function create() {
 
     newLevel();
 
-    var style = { font: "12px Arial", fill: "#ffffff", align: "left" };
-    gamepadText = game.add.text(10, 10, "", style);
-    scoreText = game.add.text(gameWidth / 2, 10, "", style);
+    const plainWhiteTextStyle = { font: "12px Arial", fill: "#ffffff", align: "left" };
+    gamepadText = game.add.text(10, 10, "", plainWhiteTextStyle);
+    scoreText = game.add.text(gameWidth / 2, 10, "", plainWhiteTextStyle);
+    gameOverText = game.add.text(0, 0, "GAME OVER", {font: "48px Arial", fill: "#ffffff", boundsAlignH: "center", boundsAlignV: "middle"});
+    gameOverText.setTextBounds(0, 0, gameWidth, gameHeight);
+    gameOverText.visible = false;
+
+    gameStartText = game.add.text(0, 0, "Press a button on your gamepad to begin.\nMove with the left stick, fire in 360° with the right stick.",
+      {font: "20px Arial", fill: "#ffffff", boundsAlignH: "center", boundsAlignV: "middle"});
+    gameStartText.setTextBounds(0, 0, gameWidth, gameHeight);
 
     gamepads = new Phaser.Gamepad(game);
+
+    if (!gamepads.supported) {
+      gameStartText.text = "Sorry - Gamepad API support is not implemented in this browser!\nPlease Try Edge, Chrome, or Firefox.";
+    }
 
     game.input.gamepad.addCallbacks(this, {
       onAxis: (pad: Phaser.SinglePad, axis: number, value: number) => {
@@ -82,6 +97,7 @@ function create() {
         const axis3 = pad.axis(3);
         padStatus[pad.index] = `Pad ${pad.index} (${(<any>pad)._rawPad['id']}): Zero: ${axis0}, One: ${axis1}, Two: ${axis2}, Three: ${axis3}`;
         if (pad0mainstick == undefined) {
+          gameStartText.visible = false;
           pad0mainstick = {x: axis0 || 0, y: axis1 || 0};
         } else {
           pad0mainstick.x = axis0 || 0;
@@ -142,7 +158,7 @@ function movePlayerToCenter() {
 }
 
 function newLevel() {
-
+    player.data.immune = true;
     movePlayerToCenter();
     weapon.killAll();
     level += 1;
@@ -166,27 +182,14 @@ function newLevel() {
       enemyBox0and2Height = (gameHeight / 2) - (playerHeight / 2 * playerScale * cheesyPreventionRatio) - yMargin,
       enemyBox1and3Height = gameHeight - enemyBox0and2Height - (yMargin * 2);
 
-    const g = game.add.graphics(0,0),
-      enemyBoxes: PIXI.Rectangle[] = Array(3);
+    const enemyBoxes: PIXI.Rectangle[] = [
+      new PIXI.Rectangle(xMargin, yMargin, enemyBox0and2Width, enemyBox0and2Height),
+      new PIXI.Rectangle(enemyBox0and2Width + xMargin, yMargin, enemyBox1and3Width, enemyBox1and3Height),
+      new PIXI.Rectangle(gameWidth - enemyBox0and2Width - xMargin, gameHeight - enemyBox0and2Height - yMargin, enemyBox0and2Width, enemyBox0and2Height),
+      new PIXI.Rectangle(xMargin, gameHeight - enemyBox1and3Height - yMargin, enemyBox1and3Width, enemyBox1and3Height)
+    ];
 
-      //492,276,162,414 xmargin = 16, ymargin = 12
-
-    enemyBoxes[0] = new PIXI.Rectangle(xMargin, yMargin, enemyBox0and2Width, enemyBox0and2Height);
-    enemyBoxes[1] = new PIXI.Rectangle(enemyBox0and2Width + xMargin, yMargin, enemyBox1and3Width, enemyBox1and3Height);
-    enemyBoxes[2] = new PIXI.Rectangle(gameWidth - enemyBox0and2Width - xMargin, gameHeight - enemyBox0and2Height - yMargin, enemyBox0and2Width, enemyBox0and2Height);
-    enemyBoxes[3] = new PIXI.Rectangle(xMargin, gameHeight - enemyBox1and3Height - yMargin, enemyBox1and3Width, enemyBox1and3Height);
-
-    // g.lineStyle(2, 0x0000FF, 1);
-    // g.drawShape(enemyBoxes[0]);
-        
-    // g.lineStyle(2, 0x00FF00, 1);
-    // g.drawShape(enemyBoxes[1]);
-
-    // g.lineStyle(2, 0xFF0000, 1);
-    // g.drawShape(enemyBoxes[2]);
-
-    // g.lineStyle(2, 0xFF00FF, 1);
-    // g.drawShape(enemyBoxes[3]);
+    //drawEnemyBoxesDebug(enemyBoxes);
 
     function randomCoordsInEnemyBox(boxIndex: number) {
       const enemyBox = enemyBoxes[boxIndex];
@@ -206,10 +209,11 @@ function newLevel() {
     for (let i = 0; i < grunts.children.length; i += 1) {
       const coords = randomCoordsInEnemyBox(i % 4),
         grunt: Phaser.Sprite = grunts.children[i] as Phaser.Sprite;
-
-        grunt.revive();
         grunt.body.position.setTo(coords.x, coords.y);
+        grunt.revive();
     }
+
+    player.data.immune = false;
  
 }
 
@@ -221,30 +225,111 @@ function render() {
 
 function update() {
   if (gamepads) {
-    gamepadDebug.innerHTML = `gamepads supported: ${gamepads.supported}.  gamepads connected: ${gamepads.padsConnected}.  gamepad info: ${JSON.stringify(padStatus)}`;
+    gamepadDebug.innerHTML = `${gamepads.supported ? "Your browser indicates that gamepads are supported" : "Your browser does not support the gamepad API"}.  Gamepads connected: ${gamepads.padsConnected}.  gamepad info: ${JSON.stringify(padStatus)}`;
   }
 
-  scoreText.text = `Level ${level} - Score: ${score}`;
+  if (player.data.immune) {
+    player.data.immuneFrameCount += 1;
+    if (player.data.immuneFrameCount === 3) {
+      player.data.immuneFrameCount = 0;
+      if (player.tint === 0xFF0000) {
+        player.tint = 0x00FF00;
+      } else if (player.tint === 0x00FF00) {
+        player.tint = 0x0000FF;
+      } else {
+        player.tint = 0xFF0000;
+      }
+    }
+  }
+
+  scoreText.text = `Hearts: ${player.health} - Level ${level} - Score: ${score}`;
   
   player.body.velocity.setTo(0, 0);
 
-  if (pad0mainstick) {
-    player.body.velocity.x = playerSpeed * pad0mainstick.x;
-    player.body.velocity.y = playerSpeed * pad0mainstick.y;
-    if (pad0mainstick.x > 0) {
-      player.scale.x = playerScale;
-    } else if (pad0mainstick.x < 0) {
-      player.scale.x = -playerScale;
-    }
-    player.animations.play('runRight');
+  handleGamepadInput();
+  //handleKeyboardInput();
+
+  if (player.body.velocity.x === 0 && player.body.velocity.y === 0) {
+    player.animations.stop();
+    player.frame = 8;
   }
 
-  if (pad0secondstick) {
-    if (pad0secondstick.x !== 0 || pad0secondstick.y !== 0) {
-      weapon.fireAtXY(player.centerX + (pad0secondstick.x * 10), player.centerY + (pad0secondstick.y * 10));
+  for (let i = 0; i < grunts.children.length; i += 1) {
+    if (pad0mainstick != undefined) {
+      game.physics.arcade.moveToObject(grunts.children[i], player, 20 + (level * 0.5));
+    } else {
+      game.physics.arcade.moveToObject(grunts.children[i], player, 0);
     }
   }
 
+  if (grunts) {
+    game.physics.arcade.overlap(grunts, player, damagePlayer, null, this);
+  }
+
+  if (weapon && weapon.bullets) {
+    game.physics.arcade.overlap(weapon.bullets, grunts, killGrunt, null, this);
+  }
+
+
+}
+
+function damagePlayer(player: Phaser.Sprite, grunt: Phaser.Sprite) {
+  if (player.alive && grunt.alive && !player.data.immune) {
+    player.damage(1);
+    if (player.alive) {
+      player.data.immune = true;
+      player.data.immuneFrameCount = 0;
+      player.tint = 0xFF0000;
+      game.time.events.add(Phaser.Timer.SECOND, () => {
+        player.data.immune = false;
+        player.data.immuneFrameCount = 0;
+        player.tint = 0xFFFFFF;
+      }, this);
+    } else {
+      movePlayerToCenter();
+      gameOverText.visible = true;
+    }
+  }
+}
+
+function killGrunt(arrow: Phaser.Bullet, grunt: Phaser.Sprite) {
+  if (arrow.alive && grunt.alive) {
+    arrow.body.velocity.x = 0;
+    arrow.body.velocity.y = 0;
+    arrow.play("arrowHit", 10, false, true);
+    grunt.kill();
+    scorePoints(100);
+  }
+
+  if (grunts.countLiving() === 0) {
+    newLevel();
+  }
+}
+
+function scorePoints(points: number) {
+  score += points;
+  if (score >= nextFreeHeart) {
+    nextFreeHeart += freeHeartEveryPoints;
+    player.heal(1);
+  }
+}
+
+function drawEnemyBoxesDebug(enemyBoxes: PIXI.Rectangle[]) {
+    const g = game.add.graphics(0,0);
+    g.lineStyle(2, 0x0000FF, 1);
+    g.drawShape(enemyBoxes[0]);
+        
+    g.lineStyle(2, 0x00FF00, 1);
+    g.drawShape(enemyBoxes[1]);
+
+    g.lineStyle(2, 0xFF0000, 1);
+    g.drawShape(enemyBoxes[2]);
+
+    g.lineStyle(2, 0xFF00FF, 1);
+    g.drawShape(enemyBoxes[3]);
+  }
+
+function handleKeyboardInput() {
   if (cursors) {
     if (cursors.left.isDown) {
       player.body.velocity.x -= playerSpeed;
@@ -265,37 +350,23 @@ function update() {
       player.animations.play('runRight');
     }
   }
+}
 
-  if (player.body.velocity.x === 0 && player.body.velocity.y === 0) {
-    player.animations.stop();
-    player.frame = 8;
-  }
-
-  for (let i = 0; i < grunts.children.length; i += 1) {
-    if (pad0mainstick != undefined) {
-      game.physics.arcade.moveToObject(grunts.children[i], player, 20 + (level * 0.5));
-    } else {
-      game.physics.arcade.moveToObject(grunts.children[i], player, 0);
+  function handleGamepadInput() {
+    if (pad0mainstick) {
+      player.body.velocity.x = playerSpeed * pad0mainstick.x;
+      player.body.velocity.y = playerSpeed * pad0mainstick.y;
+      if (pad0mainstick.x > 0) {
+        player.scale.x = playerScale;
+      } else if (pad0mainstick.x < 0) {
+        player.scale.x = -playerScale;
+      }
+      player.animations.play('runRight');
     }
-    
-  }
 
-  if (weapon && weapon.bullets) {
-    game.physics.arcade.overlap(weapon.bullets, grunts, killGrunt, null, this);
+    if (pad0secondstick) {
+      if (pad0secondstick.x !== 0 || pad0secondstick.y !== 0) {
+        weapon.fireAtXY(player.centerX + (pad0secondstick.x * 10), player.centerY + (pad0secondstick.y * 10));
+      }
+    }
   }
-
-}
-
-function killGrunt(arrow: Phaser.Bullet, grunt: Phaser.Sprite) {
-  if (arrow.alive && grunt.alive) {
-    arrow.body.velocity.x = 0;
-    arrow.body.velocity.y = 0;
-    arrow.play("arrowHit", 10, false, true);
-    grunt.kill();
-    score += 100;
-  }
-
-  if (grunts.countLiving() === 0) {
-    newLevel();
-  }
-}

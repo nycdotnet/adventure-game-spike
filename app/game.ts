@@ -273,7 +273,7 @@ function update() {
 
   for (let i = 0; i < grunts.children.length; i += 1) {
     if (pad0mainstick != undefined) {
-      game.physics.arcade.moveToObject(grunts.children[i], player, 20);
+      game.physics.arcade.moveToObject(grunts.children[i], player, 20 + (level * 0.5));
     } else {
       game.physics.arcade.moveToObject(grunts.children[i], player, 0);
     }

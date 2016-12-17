@@ -1,7 +1,30 @@
 let gameWidth = 800;
 let gameHeight = 600;
 
-const game = new Phaser.Game(gameWidth, gameHeight, Phaser.AUTO, 'game-area', {preload, create, update, render}, false, false );
+function startPlaying() {}
+function startMenu() {}
+startPlaying.prototype = {
+};
+startMenu.prototype = {
+  preload: function() {
+    game.parent = document.getElementById('game-area');
+    game.load.spritesheet('linkRunning', 'images/LinkRunning.png', 24, 28);
+    game.load.spritesheet('arrow', 'images/Arrow.png', 20, 9);
+    game.load.image('grunt', 'images/grunt.png');
+    setupGamepadSupport();
+    cursors = game.input.keyboard.createCursorKeys();
+  },
+  create: function() {
+    gameStartText = game.add.text(0, 0, "Press a button on your gamepad to begin.\nMove with the left stick, fire in 360° with the right stick.",
+      {font: "20px Arial", fill: "#ffffff", boundsAlignH: "center", boundsAlignV: "middle"});
+    gameStartText.setTextBounds(0, 0, gameWidth, gameHeight);
+  }
+};
+
+const game = new Phaser.Game(gameWidth, gameHeight, Phaser.AUTO, 'game-area'); //, {preload, create, update, render}, false, false 
+game.state.add("playing", startPlaying, false);
+game.state.add("menu", startMenu, false);
+game.state.start("menu");
 
 let player: Phaser.Sprite;
 let cursors: Phaser.CursorKeys;
@@ -19,13 +42,6 @@ let gameStartText: Phaser.Text;
 let gameOverText: Phaser.Text;
 const freeHeartEveryPoints = 35000;
 let level = 0, score = 0, nextFreeHeart = freeHeartEveryPoints;
-
-function preload() {
-    game.load.spritesheet('linkRunning', 'images/LinkRunning.png', 24, 28);
-    game.load.spritesheet('arrow', 'images/Arrow.png', 20, 9);
-    game.load.image('grunt', 'images/grunt.png');
-    gamepadDebug = document.getElementById("gamepadDebug");
-}
 
 
 function create() {
@@ -79,77 +95,6 @@ function create() {
     gameOverText.setTextBounds(0, 0, gameWidth, gameHeight);
     gameOverText.visible = false;
 
-    gameStartText = game.add.text(0, 0, "Press a button on your gamepad to begin.\nMove with the left stick, fire in 360° with the right stick.",
-      {font: "20px Arial", fill: "#ffffff", boundsAlignH: "center", boundsAlignV: "middle"});
-    gameStartText.setTextBounds(0, 0, gameWidth, gameHeight);
-
-    gamepads = new Phaser.Gamepad(game);
-
-    if (!gamepads.supported) {
-      gameStartText.text = "Sorry - Gamepad API support is not implemented in this browser!\nPlease Try Edge, Chrome, or Firefox.";
-    }
-
-    game.input.gamepad.addCallbacks(this, {
-      onAxis: (pad: Phaser.SinglePad, axis: number, value: number) => {
-        const axis0 = pad.axis(0);
-        const axis1 = pad.axis(1);
-        const axis2 = pad.axis(2);
-        const axis3 = pad.axis(3);
-        padStatus[pad.index] = `Pad ${pad.index} (${(<any>pad)._rawPad['id']}): Zero: ${axis0}, One: ${axis1}, Two: ${axis2}, Three: ${axis3}`;
-        if (pad0mainstick == undefined) {
-          gameStartText.visible = false;
-          pad0mainstick = {x: axis0 || 0, y: axis1 || 0};
-        } else {
-          pad0mainstick.x = axis0 || 0;
-          pad0mainstick.y = axis1 || 0;
-        }
-        if (pad0secondstick == undefined) {
-          pad0secondstick = {x: axis2 || 0, y: axis3 || 0};
-        } else {
-          pad0secondstick.x = axis2 || 0;
-          pad0secondstick.y = axis3 || 0;
-        }
-      },
-      onConnect: (pad) => {
-        const result = [];
-        if (gamepads.pad1.connected || pad === 0) {
-          result.push("Pad 1 connected.");
-        }
-        if (gamepads.pad2.connected || pad === 1) {
-          result.push("Pad 2 connected.");
-        }
-        if (gamepads.pad3.connected || pad === 2) {
-          result.push("Pad 3 connected.");
-        }
-        if (gamepads.pad4.connected || pad === 3) {
-          result.push("Pad 4 connected.");
-        }
-
-        gamepadText.text = result.join("  ");
-      },
-      onDisconnect: (pad) => {
-        const result = [];
-        if (gamepads.pad1.connected && pad !== 0) {
-          result.push("Pad 1 connected.");
-        }
-        if (gamepads.pad2.connected && pad !== 1) {
-          result.push("Pad 2 connected.");
-        }
-        if (gamepads.pad3.connected && pad !== 2) {
-          result.push("Pad 3 connected.");
-        }
-        if (gamepads.pad4.connected && pad !== 3) {
-          result.push("Pad 4 connected.");
-        }
-
-        gamepadText.text = result.join("  ");
-      }
-    });
-
-
-    game.input.gamepad.start();
-
-    cursors = game.input.keyboard.createCursorKeys();
 }
 
 function movePlayerToCenter() {
@@ -370,3 +315,72 @@ function handleKeyboardInput() {
       }
     }
   }
+
+  function setupGamepadSupport() {
+    gamepads = new Phaser.Gamepad(game);
+
+    gamepadDebug = document.getElementById("gamepadDebug");
+
+    if (!gamepads.supported) {
+      gameStartText.text = "Sorry - Gamepad API support is not implemented in this browser!\nPlease Try Edge, Chrome, or Firefox.";
+    }
+
+    game.input.gamepad.addCallbacks(this, {
+      onAxis: (pad: Phaser.SinglePad, axis: number, value: number) => {
+        const axis0 = pad.axis(0);
+        const axis1 = pad.axis(1);
+        const axis2 = pad.axis(2);
+        const axis3 = pad.axis(3);
+        padStatus[pad.index] = `Pad ${pad.index} (${(<any>pad)._rawPad['id']}): Zero: ${axis0}, One: ${axis1}, Two: ${axis2}, Three: ${axis3}`;
+        if (pad0mainstick == undefined) {
+          gameStartText.visible = false;
+          pad0mainstick = {x: axis0 || 0, y: axis1 || 0};
+        } else {
+          pad0mainstick.x = axis0 || 0;
+          pad0mainstick.y = axis1 || 0;
+        }
+        if (pad0secondstick == undefined) {
+          pad0secondstick = {x: axis2 || 0, y: axis3 || 0};
+        } else {
+          pad0secondstick.x = axis2 || 0;
+          pad0secondstick.y = axis3 || 0;
+        }
+      },
+      onConnect: (pad) => {
+        const result = [];
+        if (gamepads.pad1.connected || pad === 0) {
+          result.push("Pad 1 connected.");
+        }
+        if (gamepads.pad2.connected || pad === 1) {
+          result.push("Pad 2 connected.");
+        }
+        if (gamepads.pad3.connected || pad === 2) {
+          result.push("Pad 3 connected.");
+        }
+        if (gamepads.pad4.connected || pad === 3) {
+          result.push("Pad 4 connected.");
+        }
+
+        gamepadText.text = result.join("  ");
+      },
+      onDisconnect: (pad) => {
+        const result = [];
+        if (gamepads.pad1.connected && pad !== 0) {
+          result.push("Pad 1 connected.");
+        }
+        if (gamepads.pad2.connected && pad !== 1) {
+          result.push("Pad 2 connected.");
+        }
+        if (gamepads.pad3.connected && pad !== 2) {
+          result.push("Pad 3 connected.");
+        }
+        if (gamepads.pad4.connected && pad !== 3) {
+          result.push("Pad 4 connected.");
+        }
+
+        gamepadText.text = result.join("  ");
+      }
+    });
+
+    game.input.gamepad.start();
+}

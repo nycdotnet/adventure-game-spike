@@ -19,6 +19,12 @@ let gameStartText: Phaser.Text;
 let gameOverText: Phaser.Text;
 const freeHeartEveryPoints = 35000;
 let level = 0, score = 0, nextFreeHeart = freeHeartEveryPoints;
+let awaitingStartGameInput = true;
+
+function startGame() {
+  awaitingStartGameInput = false;
+  gameStartText.visible = false;
+}
 
 function preload() {
     game.load.spritesheet('linkRunning', 'images/LinkRunning.png', 24, 28);
@@ -37,7 +43,7 @@ function create() {
     game.physics.enable(player, Phaser.Physics.ARCADE);
     player.body.updateBounds();
     player.health = 3;
-
+ 
     weapon = game.add.weapon(30, 'arrow', 5);
     weapon.bullets.forEach((b : Phaser.Bullet) => {
       const body = b.body as Phaser.Physics.Arcade.Body;
@@ -79,25 +85,33 @@ function create() {
     gameOverText.setTextBounds(0, 0, gameWidth, gameHeight);
     gameOverText.visible = false;
 
-    gameStartText = game.add.text(0, 0, "Press a button on your gamepad to begin.\nMove with the left stick, fire in 360° with the right stick.",
-      {font: "20px Arial", fill: "#ffffff", boundsAlignH: "center", boundsAlignV: "middle"});
-    gameStartText.setTextBounds(0, 0, gameWidth, gameHeight);
-
     gamepads = new Phaser.Gamepad(game);
 
-    if (!gamepads.supported) {
-      gameStartText.text = "Sorry - Gamepad API support is not implemented in this browser!\nPlease Try Edge, Chrome, or Firefox.";
+    let instructions = "Zeldatron can be played with mouse and keyboard or dual-analog gamepad.";
+    if (gamepads.supported) {
+      instructions += "\nConnect a gamepad and press any button or axis to start.\nMove with the left stick, fire in 360° with the right stick.";
+    } else {
+      instructions += "\nYour browser does not support the Gamepad API.\nPlease try Edge, Firefox, or Chrome.";
     }
+    instructions += "\nTo play with the mouse and keyboard, press any key or click on the game area.\nFire by holding down the mouse button and move with\nWASD or the cursor keys.";
+
+    gameStartText = game.add.text(0, 0, instructions,
+      {font: "20px Arial", fill: "#ffffff", boundsAlignH: "center", boundsAlignV: "middle", align: "center"});
+    gameStartText.setTextBounds(0, 0, gameWidth, gameHeight);
+
 
     game.input.gamepad.addCallbacks(this, {
+      onDown: (buttonCode: number, value: number, padIndex: number) => {
+        startGame();
+      },
       onAxis: (pad: Phaser.SinglePad, axis: number, value: number) => {
+        startGame();
         const axis0 = pad.axis(0);
         const axis1 = pad.axis(1);
         const axis2 = pad.axis(2);
         const axis3 = pad.axis(3);
         padStatus[pad.index] = `Pad ${pad.index} (${(<any>pad)._rawPad['id']}): Zero: ${axis0}, One: ${axis1}, Two: ${axis2}, Three: ${axis3}`;
         if (pad0mainstick == undefined) {
-          gameStartText.visible = false;
           pad0mainstick = {x: axis0 || 0, y: axis1 || 0};
         } else {
           pad0mainstick.x = axis0 || 0;
@@ -189,8 +203,6 @@ function newLevel() {
       new PIXI.Rectangle(xMargin, gameHeight - enemyBox1and3Height - yMargin, enemyBox1and3Width, enemyBox1and3Height)
     ];
 
-    //drawEnemyBoxesDebug(enemyBoxes);
-
     function randomCoordsInEnemyBox(boxIndex: number) {
       const enemyBox = enemyBoxes[boxIndex];
       return {
@@ -223,7 +235,14 @@ function render() {
    //weapon.bullets.forEach((arrow: Phaser.Sprite) => { game.debug.body(arrow)}, this);
 }
 
+
 function update() {
+
+  if (awaitingStartGameInput) {
+    checkForStartGameInput();
+    return;
+  }
+
   if (gamepads) {
     gamepadDebug.innerHTML = `${gamepads.supported ? "Your browser indicates that gamepads are supported" : "Your browser does not support the gamepad API"}.  Gamepads connected: ${gamepads.padsConnected}.  gamepad info: ${JSON.stringify(padStatus)}`;
   }
@@ -246,8 +265,9 @@ function update() {
   
   player.body.velocity.setTo(0, 0);
 
-  handleGamepadInput();
-  //handleKeyboardInput();
+  moveAndFireFromGamepadInput();
+  handleKeyboardInput();
+  handleMouseInput();
 
   if (player.body.velocity.x === 0 && player.body.velocity.y === 0) {
     player.animations.stop();
@@ -255,8 +275,8 @@ function update() {
   }
 
   for (let i = 0; i < grunts.children.length; i += 1) {
-    if (pad0mainstick != undefined) {
-      game.physics.arcade.moveToObject(grunts.children[i], player, 20 + (level * 1.2));
+    if (!awaitingStartGameInput) {
+      game.physics.arcade.moveToObject(grunts.children[i], player, 22 + (level * 1.5));
     } else {
       game.physics.arcade.moveToObject(grunts.children[i], player, 0);
     }
@@ -327,46 +347,67 @@ function drawEnemyBoxesDebug(enemyBoxes: PIXI.Rectangle[]) {
 
     g.lineStyle(2, 0xFF00FF, 1);
     g.drawShape(enemyBoxes[3]);
-  }
+}
 
-function handleKeyboardInput() {
-  if (cursors) {
-    if (cursors.left.isDown) {
-      player.body.velocity.x -= playerSpeed;
-      player.scale.x = -playerScale;
-      player.animations.play('runRight');
-    }
-    if (cursors.right.isDown) {
-      player.body.velocity.x += playerSpeed;
-      player.scale.x = playerScale;
-      player.animations.play('runRight');
-    }
-    if (cursors.up.isDown) {
-      player.body.velocity.y -= playerSpeed;
-      player.animations.play('runRight');
-    }
-    if (cursors.down.isDown) {
-      player.body.velocity.y += playerSpeed;
-      player.animations.play('runRight');
-    }
+//let mouseFiring = false;
+function handleMouseInput() {
+  if (player.alive && game.input.activePointer.isDown) {
+    weapon.bulletAngleVariance = 10;
+    weapon.fireAtPointer(game.input.activePointer);
   }
 }
 
-  function handleGamepadInput() {
-    if (pad0mainstick) {
-      player.body.velocity.x = playerSpeed * pad0mainstick.x;
-      player.body.velocity.y = playerSpeed * pad0mainstick.y;
-      if (pad0mainstick.x > 0) {
-        player.scale.x = playerScale;
-      } else if (pad0mainstick.x < 0) {
-        player.scale.x = -playerScale;
-      }
-      player.animations.play('runRight');
-    }
+function handleKeyboardInput() {
+  if (!cursors || !player.alive) {
+    return;
+  }
+  if (cursors.left.isDown || game.input.keyboard.isDown(Phaser.KeyCode.A)) {
+    player.body.velocity.x -= playerSpeed;
+    player.scale.x = -playerScale;
+    player.animations.play('runRight');
+  }
+  if (cursors.right.isDown || game.input.keyboard.isDown(Phaser.KeyCode.D)) {
+    player.body.velocity.x += playerSpeed;
+    player.scale.x = playerScale;
+    player.animations.play('runRight');
+  }
+  if (cursors.up.isDown || game.input.keyboard.isDown(Phaser.KeyCode.W)) {
+    player.body.velocity.y -= playerSpeed;
+    player.animations.play('runRight');
+  }
+  if (cursors.down.isDown || game.input.keyboard.isDown(Phaser.KeyCode.S)) {
+    player.body.velocity.y += playerSpeed;
+    player.animations.play('runRight');
+  }
+}
 
-    if (pad0secondstick) {
-      if (pad0secondstick.x !== 0 || pad0secondstick.y !== 0) {
-        weapon.fireAtXY(player.centerX + (pad0secondstick.x * 10), player.centerY + (pad0secondstick.y * 10));
-      }
+
+function checkForStartGameInput() {
+  if (game.input.activePointer.isDown || game.input.keyboard.lastKey != undefined) {
+    startGame();
+  }
+}
+
+
+function moveAndFireFromGamepadInput() {
+  if (!player.alive) {
+    return;
+  }
+  if (pad0mainstick) {
+    player.body.velocity.x = playerSpeed * pad0mainstick.x;
+    player.body.velocity.y = playerSpeed * pad0mainstick.y;
+    if (pad0mainstick.x > 0) {
+      player.scale.x = playerScale;
+    } else if (pad0mainstick.x < 0) {
+      player.scale.x = -playerScale;
+    }
+    player.animations.play('runRight');
+  }
+
+  if (pad0secondstick) {
+    if (pad0secondstick.x !== 0 || pad0secondstick.y !== 0) {
+      weapon.bulletAngleVariance = 0;
+      weapon.fireAtXY(player.centerX + (pad0secondstick.x * 10), player.centerY + (pad0secondstick.y * 10));
     }
   }
+}

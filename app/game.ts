@@ -20,6 +20,12 @@ let gameOverText: Phaser.Text;
 const freeHeartEveryPoints = 35000;
 let level = 0, score = 0, nextFreeHeart = freeHeartEveryPoints;
 let awaitingStartGameInput = true;
+const playerWorldBoundaries = {
+  minX: 10,
+  maxX: gameWidth - 10,
+  minY: 10,
+  maxY: gameHeight -10
+};
 
 function startGame() {
   awaitingStartGameInput = false;
@@ -268,8 +274,10 @@ function update() {
   moveAndFireFromGamepadInput();
   handleKeyboardInput();
   handleMouseInput();
+  keepPlayerInBounds();
 
-  if (player.body.velocity.x === 0 && player.body.velocity.y === 0) {
+  const playerBody: Phaser.Physics.Arcade.Body = player.body;
+  if (playerBody.velocity.x === 0 && playerBody.velocity.y === 0) {
     player.animations.stop();
     player.frame = 8;
   }
@@ -289,8 +297,21 @@ function update() {
   if (weapon && weapon.bullets) {
     game.physics.arcade.overlap(weapon.bullets, grunts, killGrunt, null, this);
   }
+}
 
-
+function keepPlayerInBounds() {
+  if (player.position.x < playerWorldBoundaries.minX){
+    player.position.x = playerWorldBoundaries.minX;
+  }
+  if (player.position.y < playerWorldBoundaries.minY){
+    player.position.y = playerWorldBoundaries.minY;
+  }
+  if (player.position.x > playerWorldBoundaries.maxX){
+    player.position.x = playerWorldBoundaries.maxX;
+  }
+  if (player.position.y > playerWorldBoundaries.maxY){
+    player.position.y = playerWorldBoundaries.maxY;
+  }
 }
 
 function damagePlayer(player: Phaser.Sprite, grunt: Phaser.Sprite) {

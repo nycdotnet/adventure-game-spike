@@ -10,6 +10,7 @@ let gamepadDebug: HTMLSpanElement;
 let gamepads: Phaser.Gamepad;
 let weapon: Phaser.Weapon;
 let grunts: Phaser.Group;
+let statues: Phaser.Group;
 let padStatus: string[] = [];
 let pad0mainstick: {x: number, y: number} = undefined;
 let pad0secondstick: {x: number, y: number} = undefined;
@@ -24,7 +25,7 @@ const playerWorldBoundaries = {
   minX: 10,
   maxX: gameWidth - 10,
   minY: 10,
-  maxY: gameHeight -10
+  maxY: gameHeight - 10
 };
 
 function startGame() {
@@ -34,6 +35,7 @@ function startGame() {
 
 function preload() {
     game.load.spritesheet('linkRunning', 'images/LinkRunning.png', 24, 28);
+    game.load.spritesheet('enemies', 'images/Enemies.png', 18, 33);
     game.load.spritesheet('arrow', 'images/Arrow.png', 20, 9);
     game.load.image('grunt', 'images/grunt.png');
     gamepadDebug = document.getElementById("gamepadDebug");
@@ -81,6 +83,12 @@ function create() {
     grunts = game.add.group();
     grunts.enableBody = true;
     grunts.physicsBodyType = Phaser.Physics.ARCADE;
+
+    statues = game.add.group();
+    statues.enableBody = true;
+    statues.physicsBodyType = Phaser.Physics.ARCADE;
+    const statuesBounce = game.add.tween(statues);
+    statuesBounce.to({y: -10}, 500, Phaser.Easing.Bounce.In, true, 0, -1);
 
     newLevel();
 
@@ -184,6 +192,7 @@ function newLevel() {
     level += 1;
 
     const gruntCount = level + 9;
+    const statueCount = Math.floor(level / 3) + 1;
 
     // Enemy boxes: the screen is divided up into four boxes that do not overlap each other or the player,
     //  with a slight margin from the edge and the player.
@@ -194,7 +203,7 @@ function newLevel() {
     
     const playerWidth = 24, playerHeight = 28;
 
-    const cheesyPreventionRatio = 3,   // the higher this ratio, the further the monsters will spawn from the player.
+    const cheesyPreventionRatio = 3.5,   // the higher this ratio, the further the monsters will spawn from the player.
       xMargin = Math.floor(game.width * 0.02),
       yMargin = Math.floor(game.height * 0.02),
       enemyBox0and2Width = (gameWidth / 2) + (playerWidth / 2 * playerScale * cheesyPreventionRatio) - xMargin,
@@ -208,6 +217,8 @@ function newLevel() {
       new PIXI.Rectangle(gameWidth - enemyBox0and2Width - xMargin, gameHeight - enemyBox0and2Height - yMargin, enemyBox0and2Width, enemyBox0and2Height),
       new PIXI.Rectangle(xMargin, gameHeight - enemyBox1and3Height - yMargin, enemyBox1and3Width, enemyBox1and3Height)
     ];
+
+    drawEnemyBoxesDebug(enemyBoxes);
 
     function randomCoordsInEnemyBox(boxIndex: number) {
       const enemyBox = enemyBoxes[boxIndex];
@@ -224,11 +235,25 @@ function newLevel() {
         grunt.scale.set(1.2, 1.2);
     }
 
+    while (statues.length < statueCount) {
+      const coords = randomCoordsInEnemyBox(statues.length % 4),
+        statue = statues.create(coords.x, coords.y, 'enemies', 0);
+        statue.anchor.setTo(0.5, 0.5);
+        statue.scale.set(playerScale, playerScale);
+    }
+
     for (let i = 0; i < grunts.children.length; i += 1) {
       const coords = randomCoordsInEnemyBox(i % 4),
         grunt: Phaser.Sprite = grunts.children[i] as Phaser.Sprite;
         grunt.body.position.setTo(coords.x, coords.y);
         grunt.revive();
+    }
+
+    for (let i = 0; i < statues.children.length; i += 1) {
+      const coords = randomCoordsInEnemyBox(i % 4),
+        statue: Phaser.Sprite = statues.children[i] as Phaser.Sprite;
+        statue.body.position.setTo(coords.x, coords.y);
+        statue.revive();
     }
 
     player.data.immune = false;
@@ -238,6 +263,7 @@ function newLevel() {
 function render() {
    //game.debug.body(player);
    //grunts.forEach((grunt: Phaser.Sprite) => { game.debug.body(grunt)}, this);
+   //statues.forEach((statue: Phaser.Sprite) => { game.debug.body(statue)}, this);
    //weapon.bullets.forEach((arrow: Phaser.Sprite) => { game.debug.body(arrow)}, this);
 }
 
@@ -293,8 +319,12 @@ function update() {
   if (grunts) {
     game.physics.arcade.overlap(grunts, player, damagePlayer, null, this);
   }
+  if (statues) {
+    game.physics.arcade.overlap(statues, player, damagePlayer, null, this);
+  }
 
   if (weapon && weapon.bullets) {
+    game.physics.arcade.overlap(weapon.bullets, statues, killArrow, null, this);
     game.physics.arcade.overlap(weapon.bullets, grunts, killGrunt, null, this);
   }
 }
@@ -333,6 +363,14 @@ function damagePlayer(player: Phaser.Sprite, grunt: Phaser.Sprite) {
   }
 }
 
+function killArrow(arrow: Phaser.Bullet, otherThing: Phaser.Sprite) {
+  if (arrow.alive && otherThing.alive) {
+    arrow.body.velocity.x = 0;
+    arrow.body.velocity.y = 0;
+    arrow.play("arrowHit", 10, false, true);
+  }
+}
+
 function killGrunt(arrow: Phaser.Bullet, grunt: Phaser.Sprite) {
   if (arrow.alive && grunt.alive) {
     arrow.body.velocity.x = 0;
@@ -342,8 +380,12 @@ function killGrunt(arrow: Phaser.Bullet, grunt: Phaser.Sprite) {
     scorePoints(100);
   }
 
+  checkAndHandleNewLevelIfNeeded();
+}
+
+function checkAndHandleNewLevelIfNeeded() {
   if (grunts.countLiving() === 0) {
-    newLevel();
+      newLevel();
   }
 }
 
@@ -370,7 +412,7 @@ function drawEnemyBoxesDebug(enemyBoxes: PIXI.Rectangle[]) {
     g.drawShape(enemyBoxes[3]);
 }
 
-//let mouseFiring = false;
+
 function handleMouseInput() {
   if (player.alive && game.input.activePointer.isDown) {
     weapon.bulletAngleVariance = 10;

@@ -9,8 +9,11 @@ let playerSpeed = 250, playerScale = 3;
 let gamepadDebug: HTMLSpanElement;
 let gamepads: Phaser.Gamepad;
 let weapon: Phaser.Weapon;
+
 let grunts: Phaser.Group;
 let statues: Phaser.Group;
+let familyMembers: Phaser.Group;
+
 let padStatus: string[] = [];
 let pad0mainstick: {x: number, y: number} = undefined;
 let pad0secondstick: {x: number, y: number} = undefined;
@@ -27,6 +30,10 @@ const playerWorldBoundaries = {
   minY: 10,
   maxY: gameHeight - 10
 };
+const plainWhiteTextStyle = { font: "12px Arial", fill: "#ffffff", align: "left" };
+const centeredWhiteTextStyle = { font: "12px Arial", fill: "#ffffff", align: "center", boundsAlignH: "center", boundsAlignV: "middle" };
+const bigWhiteTextStyle = {font: "48px Arial", fill: "#ffffff", boundsAlignH: "center", boundsAlignV: "middle"};
+let familySavedOnThisLevel = 0;
 
 function startGame() {
   awaitingStartGameInput = false;
@@ -35,6 +42,7 @@ function startGame() {
 
 function preload() {
     game.load.spritesheet('linkRunning', 'images/LinkRunning.png', 24, 28);
+    game.load.spritesheet('princessZelda', 'images/PrincessZelda.png', 16, 23);
     game.load.spritesheet('enemies', 'images/Enemies.png', 18, 33);
     game.load.spritesheet('arrow', 'images/Arrow.png', 20, 9);
     game.load.image('grunt', 'images/grunt.png');
@@ -49,7 +57,9 @@ function create() {
     player.scale.setTo(playerScale, playerScale);
     player.anchor.setTo(0.5, 0.5);
     game.physics.enable(player, Phaser.Physics.ARCADE);
-    player.body.updateBounds();
+    const playerBody : Phaser.Physics.Arcade.Body = player.body;
+    playerBody.setSize(17, 24, 3, 2);
+    playerBody.updateBounds();
     player.health = 3;
  
     weapon = game.add.weapon(30, 'arrow', 5);
@@ -90,12 +100,15 @@ function create() {
     const statuesBounce = game.add.tween(statues);
     statuesBounce.to({y: -10}, 500, Phaser.Easing.Bounce.In, true, 0, -1);
 
+    familyMembers = game.add.group();
+    familyMembers.enableBody = true;
+    familyMembers.physicsBodyType = Phaser.Physics.ARCADE;
+
     newLevel();
 
-    const plainWhiteTextStyle = { font: "12px Arial", fill: "#ffffff", align: "left" };
     gamepadText = game.add.text(10, 10, "", plainWhiteTextStyle);
     scoreText = game.add.text(gameWidth / 2, 10, "", plainWhiteTextStyle);
-    gameOverText = game.add.text(0, 0, "GAME OVER", {font: "48px Arial", fill: "#ffffff", boundsAlignH: "center", boundsAlignV: "middle"});
+    gameOverText = game.add.text(0, 0, "GAME OVER", bigWhiteTextStyle);
     gameOverText.setTextBounds(0, 0, gameWidth, gameHeight);
     gameOverText.visible = false;
 
@@ -112,7 +125,6 @@ function create() {
     gameStartText = game.add.text(0, 0, instructions,
       {font: "20px Arial", fill: "#ffffff", boundsAlignH: "center", boundsAlignV: "middle", align: "center"});
     gameStartText.setTextBounds(0, 0, gameWidth, gameHeight);
-
 
     game.input.gamepad.addCallbacks(this, {
       onDown: (buttonCode: number, value: number, padIndex: number) => {
@@ -174,7 +186,6 @@ function create() {
       }
     });
 
-
     game.input.gamepad.start();
 
     cursors = game.input.keyboard.createCursorKeys();
@@ -190,9 +201,11 @@ function newLevel() {
     movePlayerToCenter();
     weapon.killAll();
     level += 1;
+    familySavedOnThisLevel = 0;
 
     const gruntCount = level + 9;
     const statueCount = Math.floor(level / 3) + 1;
+    const familyCount = level < 5 ? level : 5;
 
     // Enemy boxes: the screen is divided up into four boxes that do not overlap each other or the player,
     //  with a slight margin from the edge and the player.
@@ -218,13 +231,19 @@ function newLevel() {
       new PIXI.Rectangle(xMargin, gameHeight - enemyBox1and3Height - yMargin, enemyBox1and3Width, enemyBox1and3Height)
     ];
 
-    drawEnemyBoxesDebug(enemyBoxes);
+    //drawEnemyBoxesDebug(enemyBoxes);
 
     function randomCoordsInEnemyBox(boxIndex: number) {
       const enemyBox = enemyBoxes[boxIndex];
       return {
         x: game.rnd.integerInRange(enemyBox.x, enemyBox.x + enemyBox.width),
         y: game.rnd.integerInRange(enemyBox.y, enemyBox.y + enemyBox.height)
+      };
+    }
+    function randomCoordsInWorldMargins() {
+      return {
+        x: game.rnd.integerInRange(xMargin, game.width - xMargin),
+        y: game.rnd.integerInRange(yMargin, game.height - yMargin)
       };
     }
 
@@ -242,6 +261,23 @@ function newLevel() {
         statue.scale.set(playerScale, playerScale);
     }
 
+    while (familyMembers.length < familyCount) {
+      const coords = randomCoordsInWorldMargins(),
+        family = familyMembers.create(coords.x, coords.y, 'princessZelda', 0);
+        family.anchor.setTo(0.5, 0.5);
+        family.scale.set(playerScale, playerScale);
+    }
+
+    for (let i = 0; i < familyMembers.children.length; i += 1) {
+      const coords = randomCoordsInWorldMargins(),
+        family: Phaser.Sprite = familyMembers.children[i] as Phaser.Sprite;
+
+        family.body.position.setTo(coords.x, coords.y);
+        if (!family.alive) {
+          family.revive();
+        }
+    }
+
     for (let i = 0; i < grunts.children.length; i += 1) {
       const coords = randomCoordsInEnemyBox(i % 4),
         grunt: Phaser.Sprite = grunts.children[i] as Phaser.Sprite;
@@ -252,8 +288,9 @@ function newLevel() {
     for (let i = 0; i < statues.children.length; i += 1) {
       const coords = randomCoordsInEnemyBox(i % 4),
         statue: Phaser.Sprite = statues.children[i] as Phaser.Sprite;
+
         statue.body.position.setTo(coords.x, coords.y);
-        statue.revive();
+        statueSetTarget(statue, familyMembers);
     }
 
     player.data.immune = false;
@@ -308,13 +345,8 @@ function update() {
     player.frame = 8;
   }
 
-  for (let i = 0; i < grunts.children.length; i += 1) {
-    if (!awaitingStartGameInput) {
-      game.physics.arcade.moveToObject(grunts.children[i], player, 22 + (level * 1.5));
-    } else {
-      game.physics.arcade.moveToObject(grunts.children[i], player, 0);
-    }
-  }
+  doGruntAI();
+  doStatueAI();
 
   if (grunts) {
     game.physics.arcade.overlap(grunts, player, damagePlayer, null, this);
@@ -327,6 +359,71 @@ function update() {
     game.physics.arcade.overlap(weapon.bullets, statues, killArrow, null, this);
     game.physics.arcade.overlap(weapon.bullets, grunts, killGrunt, null, this);
   }
+
+  if (familyMembers) {
+    game.physics.arcade.overlap(familyMembers, player, rescueFamilyMember, null, this);
+    game.physics.arcade.overlap(familyMembers, statues, killFamilyMember, null, this);
+  }
+
+}
+
+function doGruntAI() {
+  if (awaitingStartGameInput) {
+    return;
+  }
+  for (let i = 0; i < grunts.children.length; i += 1) {
+    game.physics.arcade.moveToObject(grunts.children[i], player, 22 + (level * 1.5));
+  }
+}
+
+function doStatueAI() {
+  if (awaitingStartGameInput) {
+    return;
+  }
+  for (let i = 0; i < statues.children.length; i += 1) {
+    const statue = statues.children[i] as Phaser.Sprite;
+    if (!statue.data.target || !statue.data.target.alive) {
+      statueSetTarget(statue, familyMembers);
+    }
+    game.physics.arcade.moveToObject(statue, statue.data.target, 15 + (level * 1.5));
+  }
+}
+
+function statueSetTarget(statue: Phaser.Sprite, familyMembers: Phaser.Group) {
+  let target = player;
+  let targetDistance = Infinity;
+  for (let i = 0; i < familyMembers.length; i += 1) {
+    const family = familyMembers.children[i] as Phaser.Sprite;
+    if (family.alive) {
+      const distance = distanceBetweenSprites(statue, family);
+      if (target === player || distance < targetDistance) {
+        target = family;
+        targetDistance = distance;
+      }
+    }
+  }
+  statue.data.target = target;
+}
+
+function distanceBetweenSprites(sprite1: Phaser.Sprite, sprite2: Phaser.Sprite) {
+  return Math.sqrt(Math.pow(sprite1.x - sprite2.x, 2) + Math.pow(sprite1.y - sprite2.y, 2));
+}
+
+function killFamilyMember(familyMember: Phaser.Sprite, statue: Phaser.Sprite) {
+  const deathText = game.add.text(familyMember.x, familyMember.y, "☠", bigWhiteTextStyle);
+  familyMember.kill();
+  game.time.events.add(Phaser.Timer.SECOND * 3, () => deathText.kill(), this);
+}
+
+function rescueFamilyMember(player: Phaser.Sprite, familyMember: Phaser.Sprite) {
+  const familyMemberScore = 1000;
+  familySavedOnThisLevel += 1;
+  scorePoints(familyMemberScore * familySavedOnThisLevel);
+  
+  const rescueScoreText = game.add.text(familyMember.x - (familyMember.width/2), familyMember.y, (familyMemberScore * familySavedOnThisLevel).toString(), centeredWhiteTextStyle);
+  familyMember.kill();
+
+  game.time.events.add(Phaser.Timer.SECOND * 2, () => rescueScoreText.kill(), this);
 }
 
 function keepPlayerInBounds() {

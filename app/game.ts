@@ -258,7 +258,7 @@ function newLevel() {
       const coords = randomCoordsInEnemyBox(statues.length % 4),
         statue = statues.create(coords.x, coords.y, 'enemies', 0);
         statue.anchor.setTo(0.5, 0.5);
-        statue.scale.set(playerScale, playerScale);
+        statue.scale.set(playerScale * 0.9, playerScale * 0.9);
     }
 
     while (familyMembers.length < familyCount) {
@@ -290,6 +290,7 @@ function newLevel() {
         statue: Phaser.Sprite = statues.children[i] as Phaser.Sprite;
 
         statue.body.position.setTo(coords.x, coords.y);
+        statue.data.doNotMoveUntil = game.time.now;
         statueSetTarget(statue, familyMembers);
     }
 
@@ -356,7 +357,7 @@ function update() {
   }
 
   if (weapon && weapon.bullets) {
-    game.physics.arcade.overlap(weapon.bullets, statues, killArrow, null, this);
+    game.physics.arcade.overlap(weapon.bullets, statues, freezeStatue, null, this);
     game.physics.arcade.overlap(weapon.bullets, grunts, killGrunt, null, this);
   }
 
@@ -385,7 +386,11 @@ function doStatueAI() {
     if (!statue.data.target || !statue.data.target.alive) {
       statueSetTarget(statue, familyMembers);
     }
-    game.physics.arcade.moveToObject(statue, statue.data.target, 15 + (level * 1.5));
+    if (statue.data.doNotMoveUntil > game.time.now) {
+      game.physics.arcade.moveToObject(statue, statue.data.target, 0);
+    } else {
+      game.physics.arcade.moveToObject(statue, statue.data.target, 15 + (level * 1.5));
+    }
   }
 }
 
@@ -460,11 +465,12 @@ function damagePlayer(player: Phaser.Sprite, grunt: Phaser.Sprite) {
   }
 }
 
-function killArrow(arrow: Phaser.Bullet, otherThing: Phaser.Sprite) {
-  if (arrow.alive && otherThing.alive) {
+function freezeStatue(arrow: Phaser.Bullet, statue: Phaser.Sprite) {
+  if (arrow.alive && statue.alive) {
     arrow.body.velocity.x = 0;
     arrow.body.velocity.y = 0;
     arrow.play("arrowHit", 10, false, true);
+    statue.data.doNotMoveUntil = game.time.now + 1000;
   }
 }
 

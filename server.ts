@@ -2,7 +2,7 @@ import * as Hapi from 'hapi';
 import * as Inert from 'inert';
 
 const server = new Hapi.Server();
-server.connection({ host: 'localhost', port: 3000 });
+server.connection({ host: undefined, port: 3000 });
 server.register(Inert, () => {});
 
 server.route({
